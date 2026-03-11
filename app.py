@@ -1,58 +1,68 @@
 import streamlit as st
+import pickle
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import requests
 
-# Load dataset
-df = pd.read_csv("netflix_titles.csv")
-df = df[['title', 'director', 'cast', 'listed_in', 'description']]
-df.fillna('', inplace=True)
+# Load Data
+movies_dict = pickle.load(open('movies_dic.pkl','rb'))
+movies = pd.DataFrame(movies_dict)
 
-# Create metadata
-df['metadata'] = (
-    df['title'] + ' ' +
-    df['director'] + ' ' +
-    df['cast'] + ' ' +
-    df['listed_in'] + ' ' +
-    df['description']
-).str.lower()
+similarity = pickle.load(open('similarity.pkl','rb'))
 
-# TF-IDF Vectorization
-tfidf = TfidfVectorizer(stop_words='english')
-tfidf_matrix = tfidf.fit_transform(df['metadata'])
+# TMDB Poster Fetch
+API_KEY = "622a339467f3170bd68278872065e0e2"
 
-# Cosine similarity
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+@st.cache_data
+def fetch_poster(movie_id):
+    try:
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
+        data = requests.get(url, timeout=5).json()
 
-# Recommendation function
-def recommandation(title, n=5):
-    #matches work is to make the "title in dataset and the title enter by user" in lower case..
-    #so we can check whether the movie is present in the data or not
-    matches = df[df['title'].str.lower().str.contains(title.lower())]
-    if matches.empty:
-        return []
-    idx = matches.index[0]
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:n+1]
-    movie_indices = [i[0] for i in sim_scores]
-    return df.loc[movie_indices, 'title']
+        poster_path = data.get('poster_path', None)
 
-# Streamlit UI
+        if poster_path is None:
+            return "https://via.placeholder.com/300x450?text=No+Poster"
+
+        return "https://image.tmdb.org/t/p/w500/" + poster_path
+
+    except:
+        return "https://via.placeholder.com/300x450?text=Error"
+
+
+def recommend(movie):
+    movie_index = movies[movies['title'] == movie].index[0]
+    distances = similarity[movie_index]
+
+    movie_list = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:6]
+
+    recommended_names = []
+    recommended_posters = []
+
+    for i in movie_list:
+        row = movies.iloc[i[0]]
+        movie_id = row['movie_id'] if 'movie_id' in movies.columns else row['id']
+
+        recommended_names.append(row['title'])
+        recommended_posters.append(fetch_poster(movie_id))
+
+    return recommended_names, recommended_posters
 st.title("🎬 Movie Recommendation System")
-st.write("Type a movie name and get similar recommendations")
 
-movie = st.text_input("Enter movie name")
+selected_movie = st.selectbox(
+    "Select a movie",
+    movies['title'].values
+)
 
 if st.button("Recommend"):
-    if movie:
-        results = recommandation(movie)
-        if len(results) > 0:
-            st.success("Recommended Movies:")
-            for r in results:
-                st.write("👉", r)
-        else:
-            st.error("Movie not found")
-    else:
-        st.warning("Please enter a movie name")
+    names, posters = recommend(selected_movie)
 
+    cols = st.columns(5)
+
+    for i in range(5):
+        with cols[i]:
+            st.text(names[i])
+            st.image(posters[i])
