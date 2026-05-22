@@ -2,21 +2,12 @@ import streamlit as st
 import pickle
 import pandas as pd
 import requests
-import os
 
-# Set Page Config for a cleaner layout
-st.set_page_config(
-    page_title="Movie Recommendation System",
-    page_icon="🎬",
-    layout="wide"
-)
-
-# Load Data relative to this script path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-movies_dict = pickle.load(open(os.path.join(BASE_DIR, 'movies_dic.pkl'), 'rb'))
+# Load Data
+movies_dict = pickle.load(open('movies_dic.pkl','rb'))
 movies = pd.DataFrame(movies_dict)
 
-similarity = pickle.load(open(os.path.join(BASE_DIR, 'similarity.pkl'), 'rb'))
+similarity = pickle.load(open('similarity.pkl','rb'))
 
 # TMDB Poster Fetch
 API_KEY = "622a339467f3170bd68278872065e0e2"
@@ -32,8 +23,7 @@ def fetch_poster(movie_id):
         if poster_path is None:
             return "https://via.placeholder.com/300x450?text=No+Poster"
 
-        # Avoid double slash
-        return "https://image.tmdb.org/t/p/w500" + poster_path
+        return "https://image.tmdb.org/t/p/w500/" + poster_path
 
     except:
         return "https://via.placeholder.com/300x450?text=Error"
@@ -60,25 +50,19 @@ def recommend(movie):
         recommended_posters.append(fetch_poster(movie_id))
 
     return recommended_names, recommended_posters
-
-
-# App title with clapper emoji
 st.title("🎬 Movie Recommendation System")
 
-# Dropdown selectbox
 selected_movie = st.selectbox(
     "Select a movie",
     movies['title'].values
 )
 
-# Recommend button triggers recommendations
 if st.button("Recommend"):
-    with st.spinner("Searching for similar movies..."):
-        names, posters = recommend(selected_movie)
+    names, posters = recommend(selected_movie)
 
     cols = st.columns(5)
 
     for i in range(5):
         with cols[i]:
-            st.write(f"**{names[i]}**")
-            st.image(posters[i], use_container_width=True)
+            st.text(names[i])
+            st.image(posters[i])
